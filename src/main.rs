@@ -21,19 +21,21 @@ const MID_CLAW_DUTY: u16 = 225;
 const MAX_CLAW_DUTY: u16 = 325;
 const POS_FACTOR: i16 = 4;
 const NEG_FACTOR: i16 = -4;
-// pick_channel!(i, value) -> pwm.set_channel_off(Channel::C#i, #value)
 
 #[entry]
 fn main() -> ! {
+    // Movement delay in microseconds
     let mut wait_for = 3000.0;
+
+    // Initialize resources
     let dr = DeviceResources::take().unwrap();
     let dp = dr.peripherals;
     let pins = dr.pins;
-    // setup_wifi(dp, pins);
-
+    // Configure clock
     let clocks = hifive1::clock::configure(dp.PRCI, dp.AONCLK, 100.mhz().into());
     let mut delay = Delay::new();
-    // Configure UART for stdout
+
+    // Configure pins
     let mut led = pin!(pins, dig13).into_output();
     let button_r = pin!(pins, dig15).into_pull_up_input();
     let button_m = pin!(pins, dig7).into_pull_up_input();
@@ -41,6 +43,8 @@ fn main() -> ! {
     let sda = pin!(pins, i2c0_sda).into_iof0();
     let scl = pin!(pins, i2c0_scl).into_iof0();
     let i2c = I2c::new(dp.I2C0, sda, scl, Speed::Normal, clocks);
+
+    // Configure Serial out on pins 0 and 1
     hifive1::stdout::configure(
         dp.UART0,
         pin!(pins, uart0_tx),
@@ -48,16 +52,20 @@ fn main() -> ! {
         115_200.bps(),
         clocks,
     );
+
+    // Set 9685 multi servo driver
     let mut pwm = Pca9685::new(i2c, Address::default()).unwrap();
     // This results in about 60 Hz, which is the frequency at which servos operate.
     pwm.set_prescale(100).unwrap();
     pwm.enable().unwrap();
-    // Turn all channels on at time "0".
-    pwm.set_channel_on(Channel::All, 0).unwrap();
+
+    // Configure servo's limits
     let servo_min = MIN_DUTY;
     let servo_max = MAX_DUTY;
     let claw_min = MIN_CLAW_DUTY;
     let claw_max = MAX_CLAW_DUTY;
+
+    // Initialize sequence
     led.set_high().unwrap();
     delay.delay_ms(499);
     pwm.set_channel_off(Channel::C0, 275).unwrap();
@@ -86,7 +94,7 @@ fn main() -> ! {
             _ => (),
         }
     }
-
+    // End of initialize sequence
     let mut servo_index = 0;
     let mut factor: i16 = 0;
     loop {
